@@ -23,9 +23,13 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<ApiResult<LoginResponse>> Login([FromBody] LoginRequest request)
+    public async Task<ActionResult<ApiResult<LoginResponse>>> Login([FromBody] LoginRequest request)
     {
         var result = await _userService.LoginAsync(request);
+        if (result is null)
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+        }
         return result is null
             ? ApiResult<LoginResponse>.Fail("用户名或密码错误")
             : ApiResult<LoginResponse>.Ok(result);
@@ -36,15 +40,20 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpGet("me")]
     [Authorize]
-    public async Task<ApiResult<UserInfoDto>> Me()
+    public async Task<ActionResult<ApiResult<UserInfoDto>>> Me()
     {
         var idValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!long.TryParse(idValue, out var id))
         {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
             return ApiResult<UserInfoDto>.Fail("无效的登录态", 401);
         }
 
         var user = await _userService.GetByIdAsync(id);
+        if (user is null)
+        {
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+        }
         return user is null
             ? ApiResult<UserInfoDto>.Fail("用户不存在", 401)
             : ApiResult<UserInfoDto>.Ok(user);

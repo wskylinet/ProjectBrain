@@ -36,13 +36,17 @@ request.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status
-    if (status === 401) {
+    const isLoginRequest = error.config?.url === '/auth/login'
+    if (status === 401 && !isLoginRequest) {
       const authStore = useAuthStore()
       authStore.logout()
       ElMessage.error('登录已过期，请重新登录')
       router.replace('/login')
     } else {
-      ElMessage.error(error.response?.data?.message || error.message || '网络异常')
+      ElMessage.error(
+        error.response?.data?.message ||
+        (isLoginRequest ? '用户名或密码错误' : error.message || '网络异常')
+      )
     }
     return Promise.reject(error)
   }
@@ -58,6 +62,16 @@ export async function get<T>(url: string, params?: object): Promise<T> {
 
 export async function post<T>(url: string, data?: object): Promise<T> {
   const res = await request.post<ApiResult<T>>(url, data)
+  return res.data.data
+}
+
+export async function put<T>(url: string, data?: object): Promise<T> {
+  const res = await request.put<ApiResult<T>>(url, data)
+  return res.data.data
+}
+
+export async function del<T>(url: string): Promise<T> {
+  const res = await request.delete<ApiResult<T>>(url)
   return res.data.data
 }
 

@@ -33,6 +33,10 @@ public class DbContext
         Db.DbMaintenance.CreateDatabase();
         Db.CodeFirst.InitTables<SysUser>();
         Db.CodeFirst.InitTables<ProjectInfo>();
+        Db.CodeFirst.InitTables<ProjectConnection>();
+        Db.CodeFirst.InitTables<ProjectContact>();
+        Db.CodeFirst.InitTables<ProjectApplication>();
+        Db.CodeFirst.InitTables<ProjectConnectionApplication>();
 
         if (!Db.Queryable<SysUser>().Any(x => x.UserName == "admin"))
         {

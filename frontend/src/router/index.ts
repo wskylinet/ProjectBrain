@@ -18,6 +18,18 @@ const routes: RouteRecordRaw[] = [
         name: 'dashboard',
         component: () => import('@/views/Dashboard.vue'),
         meta: { title: '工作台' }
+      },
+      {
+        path: 'projects',
+        name: 'projects',
+        component: () => import('@/views/ProjectList.vue'),
+        meta: { title: '部署档案' }
+      },
+      {
+        path: 'projects/:id',
+        name: 'project-detail',
+        component: () => import('@/views/ProjectDetail.vue'),
+        meta: { title: '部署档案详情' }
       }
     ]
   },

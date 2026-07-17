@@ -5,6 +5,7 @@ using Microsoft.OpenApi.Models;
 using ProjectBrain.Api.Auth;
 using ProjectBrain.Api.Data;
 using ProjectBrain.Api.Options;
+using ProjectBrain.Api.Security;
 using ProjectBrain.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,8 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<DbContext>();
 builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddSingleton<ISecretCipher, AesSecretCipher>();
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 

@@ -18,18 +18,6 @@ public class ProjectInfo
     [SugarColumn(Length = 50, IsNullable = true)]
     public string? Region { get; set; }
 
-    [SugarColumn(Length = 100, IsNullable = true)]
-    public string? SystemName { get; set; }
-
-    [SugarColumn(Length = 50, IsNullable = true)]
-    public string? ProjectStatus { get; set; }
-
-    [SugarColumn(Length = 50, IsNullable = true)]
-    public string? OwnerName { get; set; }
-
-    [SugarColumn(Length = 100, IsNullable = true)]
-    public string? ContactInfo { get; set; }
-
     [SugarColumn(ColumnDataType = "nvarchar(max)", IsNullable = true)]
     public string? Description { get; set; }
 

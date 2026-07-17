@@ -13,8 +13,8 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 
 const form = reactive({
-  userName: 'admin',
-  password: 'admin123'
+  userName: '',
+  password: ''
 })
 
 const rules: FormRules = {
@@ -46,7 +46,7 @@ async function onSubmit() {
     <el-card class="login-card" shadow="always">
       <div class="login-header">
         <h1 class="login-title">Project Brain</h1>
-        <p class="login-subtitle">项目档案管理平台</p>
+        <p class="login-subtitle">部署档案管理平台</p>
       </div>
 
       <el-form ref="formRef" :model="form" :rules="rules" size="large" @keyup.enter="onSubmit">
@@ -68,8 +68,6 @@ async function onSubmit() {
           </el-button>
         </el-form-item>
       </el-form>
-
-      <p class="login-tip">默认账号：admin / admin123</p>
     </el-card>
   </div>
 </template>
@@ -108,12 +106,5 @@ async function onSubmit() {
 
 .login-button {
   width: 100%;
-}
-
-.login-tip {
-  text-align: center;
-  color: #c0c4cc;
-  font-size: 12px;
-  margin: 8px 0 0;
 }
 </style>

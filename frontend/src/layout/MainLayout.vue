@@ -37,16 +37,16 @@ async function onLogout() {
           <el-icon><HomeFilled /></el-icon>
           <span>工作台</span>
         </el-menu-item>
-        <el-menu-item index="/projects" disabled>
+        <el-menu-item index="/projects">
           <el-icon><Files /></el-icon>
-          <span>项目管理（开发中）</span>
+          <span>部署档案</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
 
     <el-container>
       <el-header class="layout-header">
-        <div class="header-title">项目档案管理平台</div>
+        <div class="header-title">部署档案管理平台</div>
         <el-dropdown @command="onLogout">
           <span class="user-area">
             <el-icon><UserFilled /></el-icon>
