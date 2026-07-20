@@ -27,6 +27,22 @@ public class ConnectionSaveRequest
 
     public string? Remark { get; set; }
     public int Sort { get; set; }
+    public List<RemoteControlSaveRequest> RemoteControls { get; set; } = new();
+}
+
+public class RemoteControlSaveRequest
+{
+    public long? Id { get; set; }
+
+    [Required, StringLength(30)]
+    public string SoftwareName { get; set; } = string.Empty;
+
+    [Required, StringLength(200)]
+    public string DeviceCode { get; set; } = string.Empty;
+
+    public string? Password { get; set; }
+    public bool ClearPassword { get; set; }
+    public int Sort { get; set; }
 }
 
 public class ProjectConnectionDto
@@ -44,6 +60,19 @@ public class ProjectConnectionDto
     public string? UserName { get; set; }
     public bool HasPassword { get; set; }
     public string? Remark { get; set; }
+    public int Sort { get; set; }
+    public DateTime CreateTime { get; set; }
+    public DateTime? UpdateTime { get; set; }
+    public List<ProjectConnectionRemoteControlDto> RemoteControls { get; set; } = new();
+}
+
+public class ProjectConnectionRemoteControlDto
+{
+    public long Id { get; set; }
+    public long ConnectionId { get; set; }
+    public string SoftwareName { get; set; } = string.Empty;
+    public string DeviceCode { get; set; } = string.Empty;
+    public bool HasPassword { get; set; }
     public int Sort { get; set; }
     public DateTime CreateTime { get; set; }
     public DateTime? UpdateTime { get; set; }

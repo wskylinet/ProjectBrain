@@ -14,6 +14,7 @@ import {
   getContacts,
   getProject,
   revealApplicationPassword,
+  revealRemoteControlPassword,
   revealPassword,
   updateApplication,
   updateContact,
@@ -24,6 +25,7 @@ import {
   type Project,
   type ProjectApplication,
   type ProjectConnection,
+  type ProjectConnectionRemoteControl,
   type ProjectContact
 } from '@/api/projects'
 
@@ -45,11 +47,18 @@ const editingId = ref<number>()
 const applicationEditingId = ref<number>()
 const contactEditingId = ref<number>()
 const visiblePasswords = reactive<Record<number, string>>({})
+const visibleRemoteControlPasswords = reactive<Record<number, string>>({})
 const visibleApplicationPasswords = reactive<Record<number, string>>({})
 
-const connectionTypes = ['VPN 软件', 'VPN 网页', '网页堡垒机', 'Windows 远程桌面', 'Linux SSH', 'SQL Server', 'InfluxDB', 'Hangfire', 'Redis', '网站', '其他']
+const connectionTypes = ['VPN 软件', 'VPN 网页', '网页堡垒机', '远程控制软件', 'Windows 远程桌面', 'Linux SSH', 'SQL Server', 'InfluxDB', 'Hangfire', 'Redis', '网站', '其他']
+const remoteSoftwareOptions = ['ToDesk', '向日葵']
+const rdpInstallerUrl = `${import.meta.env.BASE_URL}tools/ProjectBrainRdpInstaller.txt`
+const rdpInstallerFileName = 'Install-ProjectBrainRdpProtocol.cmd'
+const rdpUninstallerUrl = `${import.meta.env.BASE_URL}tools/ProjectBrainRdpUninstaller.txt`
+const rdpUninstallerFileName = 'Uninstall-ProjectBrainRdpProtocol.cmd'
+
 const form = reactive<ConnectionSaveRequest>({
-  applicationIds: [], name: '', connectionType: 'Windows 远程桌面', clearPassword: false, sort: 0
+  applicationIds: [], name: '', connectionType: 'Windows 远程桌面', clearPassword: false, sort: 0, remoteControls: []
 })
 const contactForm = reactive<ContactSaveRequest>({ role: '', name: '', sort: 0 })
 const applicationForm = reactive<ApplicationSaveRequest>({
@@ -59,7 +68,7 @@ const applicationForm = reactive<ApplicationSaveRequest>({
 function resetForm() {
   Object.assign(form, {
     applicationIds: [], parentId: undefined, name: '', connectionType: 'Windows 远程桌面', address: '', port: '',
-    userName: '', password: undefined, clearPassword: false, remark: '', sort: 0
+    userName: '', password: undefined, clearPassword: false, remark: '', sort: 0, remoteControls: []
   })
 }
 
@@ -97,7 +106,15 @@ function openEdit(item: ProjectConnection) {
     password: undefined,
     clearPassword: false,
     remark: item.remark || '',
-    sort: item.sort
+    sort: item.sort,
+    remoteControls: item.remoteControls.map(remote => ({
+      id: remote.id,
+      softwareName: remote.softwareName,
+      deviceCode: remote.deviceCode,
+      password: undefined,
+      clearPassword: false,
+      sort: remote.sort
+    }))
   })
   dialogVisible.value = true
 }
@@ -106,6 +123,16 @@ async function save() {
   if (!form.name.trim()) {
     ElMessage.warning('请输入连接名称')
     return
+  }
+  if (form.connectionType === '远程控制软件') {
+    if (!form.remoteControls.length) {
+      ElMessage.warning('请至少添加一种具体远控软件')
+      return
+    }
+    if (form.remoteControls.some(item => !item.softwareName.trim() || !item.deviceCode.trim())) {
+      ElMessage.warning('请完整填写具体软件和设备代码')
+      return
+    }
   }
   saving.value = true
   try {
@@ -233,9 +260,88 @@ async function showPassword(item: ProjectConnection) {
   window.setTimeout(() => delete visiblePasswords[item.id], 30000)
 }
 
+async function showRemoteControlPassword(item: ProjectConnection, remote: ProjectConnectionRemoteControl) {
+  const result = await revealRemoteControlPassword(projectId, item.id, remote.id)
+  visibleRemoteControlPasswords[remote.id] = result.password
+  window.setTimeout(() => delete visibleRemoteControlPasswords[remote.id], 30000)
+}
+
+function addRemoteControl() {
+  const used = new Set(form.remoteControls.map(item => item.softwareName))
+  const softwareName = remoteSoftwareOptions.find(item => !used.has(item)) || ''
+  form.remoteControls.push({
+    softwareName,
+    deviceCode: '',
+    password: undefined,
+    clearPassword: false,
+    sort: form.remoteControls.length
+  })
+}
+
+function removeRemoteControl(index: number) {
+  form.remoteControls.splice(index, 1)
+}
+
 async function copyText(value: string, label: string) {
   await navigator.clipboard.writeText(value)
   ElMessage.success(`${label}已复制`)
+}
+
+function isWebAddress(address?: string) {
+  return /^https?:\/\//i.test(address?.trim() || '')
+}
+
+function connectionAddressText(item: ProjectConnection) {
+  const address = item.address?.trim() || ''
+  const port = item.port?.trim()
+  if (!address || !port) return address
+
+  if (isWebAddress(address)) {
+    try {
+      const url = new URL(address)
+      if (!url.port) url.port = port
+      return url.toString()
+    } catch {
+      // 地址不符合标准 URL 时保留原来的展示方式。
+    }
+  }
+
+  return `${address}:${port}`
+}
+
+function isRemoteDesktop(item: ProjectConnection) {
+  const type = item.connectionType.toLowerCase()
+  return type.includes('远程桌面') || type.includes('rdp')
+}
+
+function canLaunchRemoteDesktop(item: ProjectConnection) {
+  if (!isRemoteDesktop(item)) return false
+
+  const byId = new Map(connections.value.map(connection => [connection.id, connection]))
+  const visited = new Set<number>([item.id])
+  let parent = item.parentId ? byId.get(item.parentId) : undefined
+  while (parent && !visited.has(parent.id)) {
+    if (parent.connectionType.toLowerCase().includes('网页堡垒机')) return false
+
+    visited.add(parent.id)
+    parent = parent.parentId ? byId.get(parent.parentId) : undefined
+  }
+
+  return true
+}
+
+function launchRemoteDesktop(item: ProjectConnection) {
+  const address = item.address?.trim()
+  if (!address) {
+    ElMessage.warning('请先填写远程桌面地址')
+    return
+  }
+
+  const query = new URLSearchParams({ address })
+  if (item.port?.trim()) query.set('port', item.port.trim())
+
+  // 只传递连接目标。用户名和密码不进入 URL，避免浏览器历史及日志泄露凭据。
+  window.location.href = `projectbrain-rdp://connect?${query.toString()}`
 }
 
 function connectionPath(item: ProjectConnection) {
@@ -260,6 +366,15 @@ onMounted(load)
       <el-button @click="router.push('/projects')">返回部署档案</el-button>
       <h2>{{ project?.region || '部署档案详情' }}</h2>
       <div class="page-header-spacer" />
+      <el-dropdown>
+        <el-button plain>远程工具</el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item><a :href="rdpInstallerUrl" :download="rdpInstallerFileName">下载初始化脚本</a></el-dropdown-item>
+            <el-dropdown-item><a :href="rdpUninstallerUrl" :download="rdpUninstallerFileName">下载卸载脚本</a></el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button v-if="!contacts.length" plain @click="openContactCreate">添加人员</el-button>
     </div>
 
@@ -352,16 +467,26 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="地址" min-width="230">
           <template #default="scope">
-            <template v-if="scope.row.address">
-              <span class="copy-value">{{ scope.row.address }}{{ scope.row.port ? `:${scope.row.port}` : '' }}</span>
-              <el-button link type="primary" @click="copyText(`${scope.row.address}${scope.row.port ? `:${scope.row.port}` : ''}`, '地址')">复制</el-button>
+            <template v-if="scope.row.connectionType === '远程控制软件'">-</template>
+            <template v-else-if="scope.row.address">
+              <a v-if="isWebAddress(scope.row.address)" :href="connectionAddressText(scope.row)" target="_blank" rel="noopener noreferrer">{{ connectionAddressText(scope.row) }}</a>
+              <span v-else class="copy-value">{{ connectionAddressText(scope.row) }}</span>
+              <el-button link type="primary" @click="copyText(connectionAddressText(scope.row), '地址')">复制</el-button>
             </template>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="用户名" min-width="170">
+        <el-table-column label="用户名" min-width="240">
           <template #default="scope">
-            <template v-if="scope.row.userName">
+            <template v-if="scope.row.connectionType === '远程控制软件'">
+              <div v-for="remote in scope.row.remoteControls" :key="remote.id" class="remote-control-row">
+                <el-tag size="small" effect="plain">{{ remote.softwareName }}</el-tag>
+                <span class="copy-value">{{ remote.deviceCode }}</span>
+                <el-button link type="primary" @click="copyText(remote.deviceCode, '设备代码')">复制</el-button>
+              </div>
+              <span v-if="!scope.row.remoteControls.length">-</span>
+            </template>
+            <template v-else-if="scope.row.userName">
               <span class="copy-value">{{ scope.row.userName }}</span>
               <el-button link type="primary" @click="copyText(scope.row.userName, '用户名')">复制</el-button>
             </template>
@@ -370,16 +495,35 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="密码" min-width="200">
           <template #default="scope">
-            <template v-if="visiblePasswords[scope.row.id]">
+            <template v-if="scope.row.connectionType === '远程控制软件'">
+              <div v-for="remote in scope.row.remoteControls" :key="remote.id" class="remote-control-password-row">
+                <span class="remote-control-password-software">{{ remote.softwareName }}：</span>
+                <template v-if="visibleRemoteControlPasswords[remote.id]">
+                  <span class="password-text">{{ visibleRemoteControlPasswords[remote.id] }}</span>
+                  <el-button link type="primary" @click="copyText(visibleRemoteControlPasswords[remote.id], '密码')">复制</el-button>
+                </template>
+                <el-button v-else-if="remote.hasPassword" link type="primary" @click="showRemoteControlPassword(scope.row, remote)">显示30秒</el-button>
+                <span v-else>-</span>
+              </div>
+              <span v-if="!scope.row.remoteControls.length">-</span>
+            </template>
+            <template v-else-if="visiblePasswords[scope.row.id]">
               <span class="password-text">{{ visiblePasswords[scope.row.id] }}</span>
               <el-button link type="primary" @click="copyText(visiblePasswords[scope.row.id], '密码')">复制</el-button>
             </template>
-            <el-button v-else-if="scope.row.hasPassword" link type="primary" @click="showPassword(scope.row)">显示30秒</el-button>
+            <el-button v-else-if="scope.row.connectionType !== '远程控制软件' && scope.row.hasPassword" link type="primary" @click="showPassword(scope.row)">显示30秒</el-button>
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="scope">
+            <el-button
+              v-if="canLaunchRemoteDesktop(scope.row)"
+              link
+              type="success"
+              :disabled="!scope.row.address"
+              @click="launchRemoteDesktop(scope.row)"
+            >一键远程</el-button>
             <el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button>
             <el-button link type="danger" @click="remove(scope.row)">删除</el-button>
           </template>
@@ -412,7 +556,7 @@ onMounted(load)
     <template #footer><el-button @click="contactDialogVisible = false">取消</el-button><el-button type="primary" :loading="contactSaving" @click="saveContact">保存</el-button></template>
   </el-dialog>
 
-  <el-dialog v-model="dialogVisible" :title="editingId ? '编辑连接' : '新增连接'" width="660px">
+  <el-dialog v-model="dialogVisible" :title="editingId ? '编辑连接' : '新增连接'" width="860px">
     <el-form :model="form" label-width="90px">
       <el-row :gutter="16">
         <el-col :span="12"><el-form-item label="连接名称" required><el-input v-model="form.name" placeholder="例如：生产堡垒机" /></el-form-item></el-col>
@@ -423,11 +567,27 @@ onMounted(load)
             <el-option v-for="item in applications" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item></el-col>
+        <template v-if="form.connectionType === '远程控制软件'">
+          <el-col :span="24"><div class="remote-control-header"><strong>具体远控软件</strong><el-button type="primary" plain @click="addRemoteControl">添加软件</el-button></div></el-col>
+          <el-col v-for="(remote, index) in form.remoteControls" :key="remote.id || `new-${index}`" :span="24">
+            <el-card shadow="never" class="remote-control-editor">
+              <el-row :gutter="12" align="middle">
+                <el-col :span="6"><el-form-item label="具体软件" required><el-select v-model="remote.softwareName" filterable allow-create default-first-option style="width:100%" placeholder="选择或输入"><el-option v-for="software in remoteSoftwareOptions" :key="software" :label="software" :value="software" /></el-select></el-form-item></el-col>
+                <el-col :span="8"><el-form-item label="设备代码" required><el-input v-model="remote.deviceCode" /></el-form-item></el-col>
+                <el-col :span="7"><el-form-item label="密码"><el-input v-model="remote.password" type="password" show-password :placeholder="remote.id ? '留空表示不修改' : ''" /></el-form-item></el-col>
+                <el-col :span="3"><el-button type="danger" link @click="removeRemoteControl(index)">删除</el-button></el-col>
+                <el-col v-if="remote.id" :span="8"><el-form-item label="清除密码"><el-switch v-model="remote.clearPassword" /></el-form-item></el-col>
+              </el-row>
+            </el-card>
+          </el-col>
+        </template>
+        <template v-else>
         <el-col :span="16"><el-form-item label="地址"><el-input v-model="form.address" placeholder="IP、域名或网址" /></el-form-item></el-col>
         <el-col :span="8"><el-form-item label="端口"><el-input v-model="form.port" /></el-form-item></el-col>
         <el-col :span="12"><el-form-item label="用户名"><el-input v-model="form.userName" /></el-form-item></el-col>
         <el-col :span="12"><el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editingId ? '留空表示不修改' : ''" /></el-form-item></el-col>
         <el-col v-if="editingId" :span="24"><el-form-item label="清除密码"><el-switch v-model="form.clearPassword" /></el-form-item></el-col>
+        </template>
         <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="3" placeholder="连接步骤、注意事项等" /></el-form-item></el-col>
       </el-row>
     </el-form>
@@ -444,4 +604,9 @@ onMounted(load)
 .connection-table { margin-top: 14px; }
 .password-text { margin-right: 8px; font-family: Consolas, monospace; }
 .copy-value, a { margin-right: 8px; }
+.remote-control-header { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 10px; }
+.remote-control-editor { margin-bottom: 10px; background: #fafafa; }
+.remote-control-row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 3px 0; }
+.remote-control-password-row { display: grid; grid-template-columns: 64px minmax(0, auto) auto; justify-content: start; align-items: center; column-gap: 5px; min-height: 32px; margin: 3px 0; }
+.remote-control-password-software { white-space: nowrap; }
 </style>

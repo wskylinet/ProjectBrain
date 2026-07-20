@@ -212,6 +212,13 @@ public class ProjectService : IProjectService
             .ToListAsync();
         var names = items.ToDictionary(x => x.Id, x => x.Name);
         var connectionIds = items.Select(x => x.Id).ToList();
+        var remoteControls = connectionIds.Count == 0
+            ? new List<ProjectConnectionRemoteControl>()
+            : await _dbContext.Db.Queryable<ProjectConnectionRemoteControl>()
+                .Where(x => connectionIds.Contains(x.ConnectionId) && !x.IsDeleted)
+                .OrderBy(x => x.Sort).OrderBy(x => x.Id).ToListAsync();
+        var remoteControlsByConnection = remoteControls.GroupBy(x => x.ConnectionId)
+            .ToDictionary(x => x.Key, x => x.AsEnumerable());
         var links = connectionIds.Count == 0
             ? new List<ProjectConnectionApplication>()
             : await _dbContext.Db.Queryable<ProjectConnectionApplication>()
@@ -232,7 +239,8 @@ public class ProjectService : IProjectService
                 x,
                 x.ParentId.HasValue && names.TryGetValue(x.ParentId.Value, out var name) ? name : null,
                 currentIds,
-                currentIds.Where(applicationNames.ContainsKey).Select(id => applicationNames[id]));
+                currentIds.Where(applicationNames.ContainsKey).Select(id => applicationNames[id]),
+                remoteControlsByConnection.GetValueOrDefault(x.Id));
         }).ToList();
     }
 
@@ -244,6 +252,8 @@ public class ProjectService : IProjectService
         if (parentError is not null) return (null, parentError);
         var applicationError = await ValidateApplicationsAsync(projectId, request.ApplicationIds);
         if (applicationError is not null) return (null, applicationError);
+        var remoteControlError = ValidateRemoteControls(request);
+        if (remoteControlError is not null) return (null, remoteControlError);
 
         var entity = new ProjectConnection
         {
@@ -253,8 +263,8 @@ public class ProjectService : IProjectService
         ApplyConnection(entity, request);
         entity.Id = await _dbContext.Db.Insertable(entity).ExecuteReturnBigIdentityAsync();
         await ReplaceConnectionApplicationsAsync(entity.Id, request.ApplicationIds);
-        var applications = await GetApplicationsByIdsAsync(request.ApplicationIds);
-        return (MapConnection(entity, null, applications.Select(x => x.Id), applications.Select(x => x.Name)), null);
+        await SyncRemoteControlsAsync(entity.Id, request.ConnectionType, request.RemoteControls);
+        return ((await GetConnectionsAsync(projectId)).First(x => x.Id == entity.Id), null);
     }
 
     public async Task<(ProjectConnectionDto? Data, string? Error)> UpdateConnectionAsync(
@@ -269,12 +279,15 @@ public class ProjectService : IProjectService
         var applicationError = await ValidateApplicationsAsync(projectId, request.ApplicationIds);
         if (applicationError is not null) return (null, applicationError);
 
+        var remoteControlError = ValidateRemoteControls(request);
+        if (remoteControlError is not null) return (null, remoteControlError);
         ApplyConnection(entity, request);
         entity.UpdateTime = DateTime.Now;
         await _dbContext.Db.Updateable(entity).ExecuteCommandAsync();
         await ReplaceConnectionApplicationsAsync(entity.Id, request.ApplicationIds);
 
         string? parentName = null;
+        await SyncRemoteControlsAsync(entity.Id, request.ConnectionType, request.RemoteControls);
         if (entity.ParentId.HasValue)
         {
             parentName = await _dbContext.Db.Queryable<ProjectConnection>()
@@ -282,8 +295,7 @@ public class ProjectService : IProjectService
                 .Select(x => x.Name)
                 .FirstAsync();
         }
-        var applications = await GetApplicationsByIdsAsync(request.ApplicationIds);
-        return (MapConnection(entity, parentName, applications.Select(x => x.Id), applications.Select(x => x.Name)), null);
+        return ((await GetConnectionsAsync(projectId)).First(x => x.Id == entity.Id), null);
     }
 
     public async Task<(bool Success, string? Error)> DeleteConnectionAsync(long projectId, long id)
@@ -301,6 +313,8 @@ public class ProjectService : IProjectService
         {
             await _dbContext.Db.Deleteable<ProjectConnectionApplication>()
                 .Where(x => x.ConnectionId == id).ExecuteCommandAsync();
+            await _dbContext.Db.Deleteable<ProjectConnectionRemoteControl>()
+                .Where(x => x.ConnectionId == id).ExecuteCommandAsync();
         }
         return affected == 0 ? (false, "连接信息不存在") : (true, null);
     }
@@ -310,6 +324,19 @@ public class ProjectService : IProjectService
         var encrypted = await _dbContext.Db.Queryable<ProjectConnection>()
             .Where(x => x.Id == id && x.ProjectId == projectId && !x.IsDeleted)
             .Select(x => x.PasswordEncrypted)
+            .FirstAsync();
+        if (string.IsNullOrEmpty(encrypted)) return (null, "未保存密码");
+        return (_secretCipher.Decrypt(encrypted), null);
+    }
+
+    public async Task<(string? Password, string? Error)> RevealRemoteControlPasswordAsync(
+        long projectId, long connectionId, long remoteControlId)
+    {
+        var encrypted = await _dbContext.Db.Queryable<ProjectConnectionRemoteControl>()
+            .InnerJoin<ProjectConnection>((remote, connection) => remote.ConnectionId == connection.Id)
+            .Where((remote, connection) => remote.Id == remoteControlId && remote.ConnectionId == connectionId &&
+                !remote.IsDeleted && connection.ProjectId == projectId && !connection.IsDeleted)
+            .Select((remote, connection) => remote.PasswordEncrypted)
             .FirstAsync();
         if (string.IsNullOrEmpty(encrypted)) return (null, "未保存密码");
         return (_secretCipher.Decrypt(encrypted), null);
@@ -374,6 +401,71 @@ public class ProjectService : IProjectService
             }).ToList();
         if (links.Count > 0)
             await _dbContext.Db.Insertable(links).ExecuteCommandAsync();
+    }
+
+    private static string? ValidateRemoteControls(ConnectionSaveRequest request)
+    {
+        if (request.ConnectionType != "远程控制软件") return null;
+        if (request.RemoteControls.Count == 0) return "请至少添加一种具体远控软件";
+        if (request.RemoteControls.Any(x => string.IsNullOrWhiteSpace(x.SoftwareName)))
+            return "具体远控软件不能为空";
+        if (request.RemoteControls.Any(x => string.IsNullOrWhiteSpace(x.DeviceCode)))
+            return "远控设备代码不能为空";
+        return null;
+    }
+
+    private async Task SyncRemoteControlsAsync(
+        long connectionId, string connectionType, IEnumerable<RemoteControlSaveRequest> requests)
+    {
+        var existing = await _dbContext.Db.Queryable<ProjectConnectionRemoteControl>()
+            .Where(x => x.ConnectionId == connectionId && !x.IsDeleted).ToListAsync();
+        var byId = existing.ToDictionary(x => x.Id);
+        var retainedIds = new HashSet<long>();
+        var items = connectionType == "远程控制软件" ? requests : Array.Empty<RemoteControlSaveRequest>();
+
+        foreach (var request in items)
+        {
+            ProjectConnectionRemoteControl entity;
+            var isExisting = false;
+            if (request.Id.HasValue && byId.TryGetValue(request.Id.Value, out var found))
+            {
+                entity = found;
+                isExisting = true;
+                retainedIds.Add(entity.Id);
+                entity.UpdateTime = DateTime.Now;
+            }
+            else
+            {
+                entity = new ProjectConnectionRemoteControl
+                {
+                    ConnectionId = connectionId,
+                    CreateTime = DateTime.Now
+                };
+            }
+
+            entity.SoftwareName = request.SoftwareName.Trim();
+            entity.DeviceCode = request.DeviceCode.Trim();
+            entity.Sort = request.Sort;
+            if (request.ClearPassword) entity.PasswordEncrypted = null;
+            else if (request.Password is not null) entity.PasswordEncrypted = _secretCipher.Encrypt(request.Password);
+
+            if (isExisting)
+                await _dbContext.Db.Updateable(entity).ExecuteCommandAsync();
+            else
+            {
+                entity.Id = await _dbContext.Db.Insertable(entity).ExecuteReturnBigIdentityAsync();
+                retainedIds.Add(entity.Id);
+            }
+        }
+
+        var removedIds = existing.Select(x => x.Id).Where(id => !retainedIds.Contains(id)).ToList();
+        if (removedIds.Count > 0)
+        {
+            await _dbContext.Db.Updateable<ProjectConnectionRemoteControl>()
+                .SetColumns(x => x.IsDeleted == true)
+                .SetColumns(x => x.UpdateTime == DateTime.Now)
+                .Where(x => removedIds.Contains(x.Id)).ExecuteCommandAsync();
+        }
     }
 
     private async Task<string?> ValidateParentAsync(long projectId, long? parentId, long? currentId)
@@ -479,7 +571,8 @@ public class ProjectService : IProjectService
         ProjectConnection x,
         string? parentName,
         IEnumerable<long>? applicationIds = null,
-        IEnumerable<string>? applicationNames = null) => new()
+        IEnumerable<string>? applicationNames = null,
+        IEnumerable<ProjectConnectionRemoteControl>? remoteControls = null) => new()
     {
         Id = x.Id,
         ProjectId = x.ProjectId,
@@ -494,6 +587,19 @@ public class ProjectService : IProjectService
         UserName = x.UserName,
         HasPassword = !string.IsNullOrEmpty(x.PasswordEncrypted),
         Remark = x.Remark,
+        Sort = x.Sort,
+        CreateTime = x.CreateTime,
+        UpdateTime = x.UpdateTime,
+        RemoteControls = remoteControls?.Select(MapRemoteControl).ToList() ?? new List<ProjectConnectionRemoteControlDto>()
+    };
+
+    private static ProjectConnectionRemoteControlDto MapRemoteControl(ProjectConnectionRemoteControl x) => new()
+    {
+        Id = x.Id,
+        ConnectionId = x.ConnectionId,
+        SoftwareName = x.SoftwareName,
+        DeviceCode = x.DeviceCode,
+        HasPassword = !string.IsNullOrEmpty(x.PasswordEncrypted),
         Sort = x.Sort,
         CreateTime = x.CreateTime,
         UpdateTime = x.UpdateTime

@@ -163,4 +163,15 @@ public class ProjectsController : ControllerBase
             ? BadRequest(ApiResult<RevealPasswordDto>.Fail(result.Error ?? "无法读取密码"))
             : Ok(ApiResult<RevealPasswordDto>.Ok(new RevealPasswordDto { Password = result.Password }));
     }
+
+    [HttpPost("{projectId:long}/connections/{connectionId:long}/remote-controls/{remoteControlId:long}/reveal-password")]
+    public async Task<ActionResult<ApiResult<RevealPasswordDto>>> RevealRemoteControlPassword(
+        long projectId, long connectionId, long remoteControlId)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var result = await _projectService.RevealRemoteControlPasswordAsync(projectId, connectionId, remoteControlId);
+        return result.Password is null
+            ? BadRequest(ApiResult<RevealPasswordDto>.Fail(result.Error ?? "无法读取密码"))
+            : Ok(ApiResult<RevealPasswordDto>.Ok(new RevealPasswordDto { Password = result.Password }));
+    }
 }

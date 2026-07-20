@@ -1,0 +1,102 @@
+@echo off
+setlocal
+set "PROJECTBRAIN_INSTALLER=%~f0"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$s=[IO.File]::ReadAllText($env:PROJECTBRAIN_INSTALLER);$m='# PROJECTBRAIN POWERSHELL';$i=$s.LastIndexOf($m);if($i -lt 0){throw 'Installer payload not found.'};&([scriptblock]::Create($s.Substring($i+$m.Length)))"
+set "PROJECTBRAIN_EXIT_CODE=%ERRORLEVEL%"
+echo.
+pause
+exit /b %PROJECTBRAIN_EXIT_CODE%
+
+# PROJECTBRAIN POWERSHELL
+$ErrorActionPreference = 'Stop'
+
+$handlerContent = @'
+param([Parameter(Mandatory=$true,Position=0)][string]$ProtocolUri)
+$ErrorActionPreference = 'Stop'
+
+function Show-ProtocolError([string]$Message) {
+    Add-Type -AssemblyName PresentationFramework
+    [System.Windows.MessageBox]::Show(
+        $Message,
+        'Project Brain Remote Desktop',
+        [System.Windows.MessageBoxButton]::OK,
+        [System.Windows.MessageBoxImage]::Warning
+    ) | Out-Null
+}
+
+function Get-QueryParameters([System.Uri]$Uri) {
+    $result = @{}
+    foreach ($part in $Uri.Query.TrimStart('?').Split('&',[System.StringSplitOptions]::RemoveEmptyEntries)) {
+        $pair = $part.Split('=',2)
+        $name = [System.Uri]::UnescapeDataString($pair[0])
+        $value = if ($pair.Length -eq 2) {
+            [System.Uri]::UnescapeDataString($pair[1].Replace('+',' '))
+        } else { '' }
+        $result[$name] = $value
+    }
+    return $result
+}
+
+try {
+    $uri = [System.Uri]$ProtocolUri
+    if ($uri.Scheme -ne 'projectbrain-rdp' -or $uri.Host -ne 'connect') {
+        throw 'Invalid Project Brain Remote Desktop URI.'
+    }
+
+    $parameters = Get-QueryParameters $uri
+    $address = ([string]$parameters['address']).Trim()
+    if ([string]::IsNullOrWhiteSpace($address) -or $address.Length -gt 255) {
+        throw 'The Remote Desktop address is empty or too long.'
+    }
+
+    $ipAddress = $null
+    $isIpAddress = [System.Net.IPAddress]::TryParse($address,[ref]$ipAddress)
+    $isHostName = $address -match '^[A-Za-z0-9_](?:[A-Za-z0-9._-]{0,253}[A-Za-z0-9_])?$'
+    if (-not $isIpAddress -and -not $isHostName) {
+        throw 'The Remote Desktop address is invalid.'
+    }
+
+    $port = 3389
+    $portText = ([string]$parameters['port']).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($portText)) {
+        if (-not [int]::TryParse($portText,[ref]$port) -or $port -lt 1 -or $port -gt 65535) {
+            throw 'The Remote Desktop port must be from 1 to 65535.'
+        }
+    }
+
+    $displayAddress = if ($isIpAddress -and $ipAddress.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetworkV6) {
+        "[$address]"
+    } else { $address }
+    $mstsc = Join-Path $env:SystemRoot 'System32\mstsc.exe'
+    Start-Process -FilePath $mstsc -ArgumentList @("/v:${displayAddress}:$port")
+} catch {
+    Show-ProtocolError $_.Exception.Message
+    exit 1
+}
+'@
+
+$installDirectory = Join-Path $env:LOCALAPPDATA 'ProjectBrain\RdpProtocol'
+$handlerDestination = Join-Path $installDirectory 'ProjectBrain.RdpHandler.ps1'
+$protocolKey = 'HKCU:\Software\Classes\projectbrain-rdp'
+$powershellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$mstscPath = Join-Path $env:SystemRoot 'System32\mstsc.exe'
+
+New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+$utf8Bom = New-Object System.Text.UTF8Encoding($true)
+[System.IO.File]::WriteAllText($handlerDestination,$handlerContent,$utf8Bom)
+
+New-Item -Path $protocolKey -Force | Out-Null
+Set-Item -Path $protocolKey -Value 'URL:Project Brain Remote Desktop Protocol'
+New-ItemProperty -Path $protocolKey -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null
+
+$iconKey = Join-Path $protocolKey 'DefaultIcon'
+New-Item -Path $iconKey -Force | Out-Null
+Set-Item -Path $iconKey -Value "`"$mstscPath`",0"
+
+$commandKey = Join-Path $protocolKey 'shell\open\command'
+New-Item -Path $commandKey -Force | Out-Null
+$command = "`"$powershellPath`" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$handlerDestination`" `"%1`""
+Set-Item -Path $commandKey -Value $command
+
+Write-Host 'Project Brain Remote Desktop protocol installed successfully.' -ForegroundColor Green
+Write-Host 'Return to the web page and click the Remote Desktop button.'

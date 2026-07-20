@@ -42,6 +42,7 @@ export interface ProjectConnection {
   sort: number
   createTime: string
   updateTime?: string
+  remoteControls: ProjectConnectionRemoteControl[]
 }
 
 export interface ConnectionSaveRequest {
@@ -56,6 +57,27 @@ export interface ConnectionSaveRequest {
   clearPassword: boolean
   remark?: string
   sort: number
+  remoteControls: RemoteControlSaveRequest[]
+}
+
+export interface RemoteControlSaveRequest {
+  id?: number
+  softwareName: string
+  deviceCode: string
+  password?: string
+  clearPassword: boolean
+  sort: number
+}
+
+export interface ProjectConnectionRemoteControl {
+  id: number
+  connectionId: number
+  softwareName: string
+  deviceCode: string
+  hasPassword: boolean
+  sort: number
+  createTime: string
+  updateTime?: string
 }
 
 export interface ProjectApplication {
@@ -145,5 +167,7 @@ export const deleteConnection = (projectId: number, id: number) =>
   del<void>(`/projects/${projectId}/connections/${id}`)
 export const revealPassword = (projectId: number, id: number) =>
   post<{ password: string }>(`/projects/${projectId}/connections/${id}/reveal-password`)
+export const revealRemoteControlPassword = (projectId: number, connectionId: number, remoteControlId: number) =>
+  post<{ password: string }>(`/projects/${projectId}/connections/${connectionId}/remote-controls/${remoteControlId}/reveal-password`)
 
 export const getDashboardStats = () => get<DashboardStats>('/dashboard/stats')

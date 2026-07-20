@@ -1,0 +1,7 @@
+@echo off
+setlocal
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop';$p='HKCU:\Software\Classes\projectbrain-rdp';$d=Join-Path $env:LOCALAPPDATA 'ProjectBrain\RdpProtocol';if(Test-Path -LiteralPath $p){Remove-Item -LiteralPath $p -Recurse -Force};if(Test-Path -LiteralPath $d){Remove-Item -LiteralPath $d -Recurse -Force};Write-Host 'Project Brain Remote Desktop protocol uninstalled successfully.' -ForegroundColor Green"
+set "PROJECTBRAIN_EXIT_CODE=%ERRORLEVEL%"
+echo.
+pause
+exit /b %PROJECTBRAIN_EXIT_CODE%

@@ -23,5 +23,6 @@ public interface IProjectService
     Task<(ProjectConnectionDto? Data, string? Error)> UpdateConnectionAsync(long projectId, long id, ConnectionSaveRequest request);
     Task<(bool Success, string? Error)> DeleteConnectionAsync(long projectId, long id);
     Task<(string? Password, string? Error)> RevealPasswordAsync(long projectId, long id);
+    Task<(string? Password, string? Error)> RevealRemoteControlPasswordAsync(long projectId, long connectionId, long remoteControlId);
     Task<DashboardStatsDto> GetDashboardStatsAsync();
 }

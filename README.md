@@ -61,3 +61,7 @@ npm run dev
 
 - 生产环境务必修改 `appsettings.json` 中的 `Jwt:SecretKey` 为足够长的随机值。
 - 数据库连接字符串、密钥等敏感信息不应提交到版本库，建议使用环境变量或用户机密。
+
+## 一键远程桌面
+
+连接信息中的 Windows 远程桌面/RDP 类型支持从网页直接调用系统 `mstsc.exe`，无需重复下载 `.rdp` 文件。使用前需在每台 Windows 电脑上注册一次自定义协议，详见 [一键远程桌面说明](docs/rdp-protocol.md)。

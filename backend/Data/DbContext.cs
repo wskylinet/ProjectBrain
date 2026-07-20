@@ -34,6 +34,7 @@ public class DbContext
         Db.CodeFirst.InitTables<SysUser>();
         Db.CodeFirst.InitTables<ProjectInfo>();
         Db.CodeFirst.InitTables<ProjectConnection>();
+        Db.CodeFirst.InitTables<ProjectConnectionRemoteControl>();
         Db.CodeFirst.InitTables<ProjectContact>();
         Db.CodeFirst.InitTables<ProjectApplication>();
         Db.CodeFirst.InitTables<ProjectConnectionApplication>();
