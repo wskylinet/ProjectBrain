@@ -128,7 +128,7 @@ onMounted(load)
     />
   </el-card>
 
-  <el-dialog v-model="dialogVisible" :title="editingId ? '编辑部署档案' : '新增部署档案'" width="620px">
+  <el-dialog v-model="dialogVisible" :title="editingId ? '编辑部署档案' : '新增部署档案'" width="620px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
     <el-form :model="form" label-width="90px">
       <el-row :gutter="16">
         <el-col :span="24"><el-form-item label="部署地点" required><el-input v-model="form.region" placeholder="例如：深圳" /></el-form-item></el-col>

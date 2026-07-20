@@ -532,7 +532,7 @@ onMounted(load)
     </el-card>
   </div>
 
-  <el-dialog v-model="applicationDialogVisible" :title="applicationEditingId ? '编辑业务系统' : '新增业务系统'" width="600px">
+  <el-dialog v-model="applicationDialogVisible" :title="applicationEditingId ? '编辑业务系统' : '新增业务系统'" width="600px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
     <el-form :model="applicationForm" label-width="90px">
       <el-form-item label="系统名称" required><el-input v-model="applicationForm.name" placeholder="例如：智水家园、校园节水、计量云" /></el-form-item>
       <el-form-item label="登录入口"><el-input v-model="applicationForm.loginAddress" placeholder="例如：https://example.com" /></el-form-item>
@@ -544,7 +544,7 @@ onMounted(load)
     <template #footer><el-button @click="applicationDialogVisible = false">取消</el-button><el-button type="primary" :loading="applicationSaving" @click="saveApplication">保存</el-button></template>
   </el-dialog>
 
-  <el-dialog v-model="contactDialogVisible" :title="contactEditingId ? '编辑相关人员' : '新增相关人员'" width="560px">
+  <el-dialog v-model="contactDialogVisible" :title="contactEditingId ? '编辑相关人员' : '新增相关人员'" width="560px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
     <el-form :model="contactForm" label-width="80px">
       <el-form-item label="职责" required>
         <el-input v-model="contactForm.role" placeholder="例如：硬件、实施、运维" />
@@ -556,7 +556,7 @@ onMounted(load)
     <template #footer><el-button @click="contactDialogVisible = false">取消</el-button><el-button type="primary" :loading="contactSaving" @click="saveContact">保存</el-button></template>
   </el-dialog>
 
-  <el-dialog v-model="dialogVisible" :title="editingId ? '编辑连接' : '新增连接'" width="860px">
+  <el-dialog v-model="dialogVisible" :title="editingId ? '编辑连接' : '新增连接'" width="860px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
     <el-form :model="form" label-width="90px">
       <el-row :gutter="16">
         <el-col :span="12"><el-form-item label="连接名称" required><el-input v-model="form.name" placeholder="例如：生产堡垒机" /></el-form-item></el-col>
