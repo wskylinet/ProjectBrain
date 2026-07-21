@@ -25,6 +25,7 @@ public class DbContext
     {
         Db.DbMaintenance.CreateDatabase();
         Db.CodeFirst.InitTables<SysUser, SysRole, SysPermission, SysUserRole, SysRolePermission>();
+        Db.CodeFirst.InitTables<SysAuditLog>();
         Db.CodeFirst.InitTables<ProjectInfo, ProjectConnection, ProjectConnectionRemoteControl>();
         Db.CodeFirst.InitTables<ProjectContact, ProjectApplication, ProjectConnectionApplication>();
 

@@ -19,9 +19,10 @@ async function onLogout() {
       <el-menu :default-active="$route.path" router class="layout-menu">
         <el-menu-item v-if="auth.hasPermission('archive:view')" index="/dashboard"><el-icon><HomeFilled /></el-icon><span>工作台</span></el-menu-item>
         <el-menu-item v-if="auth.hasPermission('archive:view')" index="/projects"><el-icon><Files /></el-icon><span>部署档案</span></el-menu-item>
-        <el-sub-menu v-if="auth.hasPermission('user:view')" index="system">
+        <el-sub-menu v-if="auth.hasPermission('user:view') || auth.hasPermission('audit:view')" index="system">
           <template #title><el-icon><Setting /></el-icon><span>系统管理</span></template>
-          <el-menu-item index="/system/users"><el-icon><User /></el-icon><span>用户管理</span></el-menu-item>
+          <el-menu-item v-if="auth.hasPermission('user:view')" index="/system/users"><el-icon><User /></el-icon><span>用户管理</span></el-menu-item>
+          <el-menu-item v-if="auth.hasPermission('audit:view')" index="/system/audit-logs"><el-icon><List /></el-icon><span>审计日志</span></el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>

@@ -58,6 +58,7 @@ public class PermissionAuthorizationFilter : IAsyncActionFilter
         "Dashboard" => PermissionCodes.ArchiveView,
         "Users" => method == "GET" ? PermissionCodes.UserView : PermissionCodes.UserManage,
         "Roles" => method == "GET" ? PermissionCodes.UserView : PermissionCodes.RoleManage,
+        "AuditLogs" => PermissionCodes.AuditView,
         "Projects" when action.Contains("Reveal", StringComparison.OrdinalIgnoreCase) => PermissionCodes.SecretReveal,
         "Projects" when method == "GET" => PermissionCodes.ArchiveView,
         "Projects" when method == "DELETE" => PermissionCodes.ArchiveDelete,

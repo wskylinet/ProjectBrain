@@ -9,7 +9,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/Dashboard.vue'), meta: { title: '工作台', permission: 'archive:view' } },
       { path: 'projects', name: 'projects', component: () => import('@/views/ProjectList.vue'), meta: { title: '部署档案', permission: 'archive:view' } },
       { path: 'projects/:id', name: 'project-detail', component: () => import('@/views/ProjectDetail.vue'), meta: { title: '部署档案详情', permission: 'archive:view' } },
-      { path: 'system/users', name: 'users', component: () => import('@/views/UserList.vue'), meta: { title: '用户管理', permission: 'user:view' } }
+      { path: 'system/users', name: 'users', component: () => import('@/views/UserList.vue'), meta: { title: '用户管理', permission: 'user:view' } },
+      { path: 'system/audit-logs', name: 'audit-logs', component: () => import('@/views/AuditLogList.vue'), meta: { title: '审计日志', permission: 'audit:view' } }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' }
@@ -27,6 +28,7 @@ router.beforeEach(async (to) => {
   if (permission && !auth.hasPermission(permission)) {
     if (auth.hasPermission('archive:view')) return '/projects'
     if (auth.hasPermission('user:view')) return '/system/users'
+    if (auth.hasPermission('audit:view')) return '/system/audit-logs'
     auth.logout()
     return '/login'
   }

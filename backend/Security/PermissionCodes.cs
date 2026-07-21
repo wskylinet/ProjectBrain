@@ -11,6 +11,7 @@ public static class PermissionCodes
     public const string UserView = "user:view";
     public const string UserManage = "user:manage";
     public const string RoleManage = "role:manage";
+    public const string AuditView = "audit:view";
 
     public static readonly (string Code, string Name, string Module, int Sort)[] All =
     [
@@ -22,6 +23,7 @@ public static class PermissionCodes
         (SecretUpdate, "修改密码信息", "密码", 60),
         (UserView, "查看用户", "系统", 70),
         (UserManage, "管理用户", "系统", 80),
-        (RoleManage, "管理角色权限", "系统", 90)
+        (RoleManage, "管理角色权限", "系统", 90),
+        (AuditView, "查看审计日志", "系统", 100)
     ];
 }

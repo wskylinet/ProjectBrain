@@ -17,7 +17,9 @@ builder.Services.AddSingleton<JwtHelper>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<PermissionAuthorizationFilter>();
+builder.Services.AddScoped<AuditLogFilter>();
 builder.Services.AddSingleton<ISecretCipher, AesSecretCipher>();
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
@@ -37,7 +39,11 @@ builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
     var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"];
     policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
 }));
-builder.Services.AddControllers(options => options.Filters.Add<PermissionAuthorizationFilter>());
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<PermissionAuthorizationFilter>();
+    options.Filters.Add<AuditLogFilter>();
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
