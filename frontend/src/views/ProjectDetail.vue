@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createApplication,
@@ -31,6 +32,7 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const projectId = Number(route.params.id)
 const project = ref<Project>()
 const applications = ref<ProjectApplication[]>([])
@@ -375,7 +377,7 @@ onMounted(load)
           </el-dropdown-menu>
         </template>
       </el-dropdown>
-      <el-button v-if="!contacts.length" plain @click="openContactCreate">添加人员</el-button>
+      <el-button v-if="auth.hasPermission('archive:update') && !contacts.length" plain @click="openContactCreate">添加人员</el-button>
     </div>
 
     <el-card v-if="project" shadow="never">
@@ -387,7 +389,7 @@ onMounted(load)
 
     <el-card shadow="never" class="section-card">
       <template #header>
-        <div class="card-header"><span>业务系统</span><el-button type="primary" @click="openApplicationCreate">新增业务系统</el-button></div>
+        <div class="card-header"><span>业务系统</span><el-button v-if="auth.hasPermission('archive:update')" type="primary" @click="openApplicationCreate">新增业务系统</el-button></div>
       </template>
       <el-table :data="applications" border empty-text="暂未添加业务系统">
         <el-table-column prop="name" label="系统名称" min-width="150" />
@@ -415,15 +417,15 @@ onMounted(load)
               <span class="password-text">{{ visibleApplicationPasswords[scope.row.id] }}</span>
               <el-button link type="primary" @click="copyText(visibleApplicationPasswords[scope.row.id], '密码')">复制</el-button>
             </template>
-            <el-button v-else-if="scope.row.hasPassword" link type="primary" @click="showApplicationPassword(scope.row)">显示30秒</el-button>
+            <el-button v-else-if="scope.row.hasPassword && auth.hasPermission('secret:reveal')" link type="primary" @click="showApplicationPassword(scope.row)">显示30秒</el-button>
             <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="160" />
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="scope">
-            <el-button link type="primary" @click="openApplicationEdit(scope.row)">编辑</el-button>
-            <el-button link type="danger" @click="removeApplication(scope.row)">删除</el-button>
+            <el-button v-if="auth.hasPermission('archive:update')" link type="primary" @click="openApplicationEdit(scope.row)">编辑</el-button>
+            <el-button v-if="auth.hasPermission('archive:delete')" link type="danger" @click="removeApplication(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -431,7 +433,7 @@ onMounted(load)
 
     <el-card v-if="contacts.length" shadow="never" class="section-card">
       <template #header>
-        <div class="card-header"><span>相关人员</span><el-button type="primary" @click="openContactCreate">新增人员</el-button></div>
+        <div class="card-header"><span>相关人员</span><el-button v-if="auth.hasPermission('archive:update')" type="primary" @click="openContactCreate">新增人员</el-button></div>
       </template>
       <el-table :data="contacts" border>
         <el-table-column prop="role" label="职责" width="130" />
@@ -440,8 +442,8 @@ onMounted(load)
         <el-table-column prop="remark" label="备注" min-width="180" />
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="scope">
-            <el-button link type="primary" @click="openContactEdit(scope.row)">编辑</el-button>
-            <el-button link type="danger" @click="removeContact(scope.row)">删除</el-button>
+            <el-button v-if="auth.hasPermission('archive:update')" link type="primary" @click="openContactEdit(scope.row)">编辑</el-button>
+            <el-button v-if="auth.hasPermission('archive:delete')" link type="danger" @click="removeContact(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -449,7 +451,7 @@ onMounted(load)
 
     <el-card shadow="never" class="section-card">
       <template #header>
-        <div class="card-header"><span>连接信息</span><el-button type="primary" @click="openCreate">新增连接</el-button></div>
+        <div class="card-header"><span>连接信息</span><el-button v-if="auth.hasPermission('archive:update')" type="primary" @click="openCreate">新增连接</el-button></div>
       </template>
       <el-alert title="通过前置连接可表达：VPN 软件或网页 → 网页堡垒机 → 远程桌面 → SQL Server、InfluxDB、Redis 等" type="info" :closable="false" />
       <el-table :data="connections" border class="connection-table">
@@ -502,7 +504,7 @@ onMounted(load)
                   <span class="password-text">{{ visibleRemoteControlPasswords[remote.id] }}</span>
                   <el-button link type="primary" @click="copyText(visibleRemoteControlPasswords[remote.id], '密码')">复制</el-button>
                 </template>
-                <el-button v-else-if="remote.hasPassword" link type="primary" @click="showRemoteControlPassword(scope.row, remote)">显示30秒</el-button>
+                <el-button v-else-if="remote.hasPassword && auth.hasPermission('secret:reveal')" link type="primary" @click="showRemoteControlPassword(scope.row, remote)">显示30秒</el-button>
                 <span v-else>-</span>
               </div>
               <span v-if="!scope.row.remoteControls.length">-</span>
@@ -511,7 +513,7 @@ onMounted(load)
               <span class="password-text">{{ visiblePasswords[scope.row.id] }}</span>
               <el-button link type="primary" @click="copyText(visiblePasswords[scope.row.id], '密码')">复制</el-button>
             </template>
-            <el-button v-else-if="scope.row.connectionType !== '远程控制软件' && scope.row.hasPassword" link type="primary" @click="showPassword(scope.row)">显示30秒</el-button>
+            <el-button v-else-if="scope.row.connectionType !== '远程控制软件' && scope.row.hasPassword && auth.hasPermission('secret:reveal')" link type="primary" @click="showPassword(scope.row)">显示30秒</el-button>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -524,8 +526,8 @@ onMounted(load)
               :disabled="!scope.row.address"
               @click="launchRemoteDesktop(scope.row)"
             >一键远程</el-button>
-            <el-button link type="primary" @click="openEdit(scope.row)">编辑</el-button>
-            <el-button link type="danger" @click="remove(scope.row)">删除</el-button>
+            <el-button v-if="auth.hasPermission('archive:update')" link type="primary" @click="openEdit(scope.row)">编辑</el-button>
+            <el-button v-if="auth.hasPermission('archive:delete')" link type="danger" @click="remove(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -537,8 +539,8 @@ onMounted(load)
       <el-form-item label="系统名称" required><el-input v-model="applicationForm.name" placeholder="例如：智水家园、校园节水、计量云" /></el-form-item>
       <el-form-item label="登录入口"><el-input v-model="applicationForm.loginAddress" placeholder="例如：https://example.com" /></el-form-item>
       <el-form-item label="登录账号"><el-input v-model="applicationForm.userName" /></el-form-item>
-      <el-form-item label="登录密码"><el-input v-model="applicationForm.password" type="password" show-password :placeholder="applicationEditingId ? '留空表示不修改' : ''" /></el-form-item>
-      <el-form-item v-if="applicationEditingId" label="清除密码"><el-switch v-model="applicationForm.clearPassword" /></el-form-item>
+      <el-form-item v-if="auth.hasPermission('secret:update')" label="登录密码"><el-input v-model="applicationForm.password" type="password" show-password :placeholder="applicationEditingId ? '留空表示不修改' : ''" /></el-form-item>
+      <el-form-item v-if="applicationEditingId && auth.hasPermission('secret:update')" label="清除密码"><el-switch v-model="applicationForm.clearPassword" /></el-form-item>
       <el-form-item label="备注"><el-input v-model="applicationForm.remark" type="textarea" :rows="3" /></el-form-item>
     </el-form>
     <template #footer><el-button @click="applicationDialogVisible = false">取消</el-button><el-button type="primary" :loading="applicationSaving" @click="saveApplication">保存</el-button></template>
@@ -574,9 +576,9 @@ onMounted(load)
               <el-row :gutter="12" align="middle">
                 <el-col :span="6"><el-form-item label="具体软件" required><el-select v-model="remote.softwareName" filterable allow-create default-first-option style="width:100%" placeholder="选择或输入"><el-option v-for="software in remoteSoftwareOptions" :key="software" :label="software" :value="software" /></el-select></el-form-item></el-col>
                 <el-col :span="8"><el-form-item label="设备代码" required><el-input v-model="remote.deviceCode" /></el-form-item></el-col>
-                <el-col :span="7"><el-form-item label="密码"><el-input v-model="remote.password" type="password" show-password :placeholder="remote.id ? '留空表示不修改' : ''" /></el-form-item></el-col>
+                <el-col v-if="auth.hasPermission('secret:update')" :span="7"><el-form-item label="密码"><el-input v-model="remote.password" type="password" show-password :placeholder="remote.id ? '留空表示不修改' : ''" /></el-form-item></el-col>
                 <el-col :span="3"><el-button type="danger" link @click="removeRemoteControl(index)">删除</el-button></el-col>
-                <el-col v-if="remote.id" :span="8"><el-form-item label="清除密码"><el-switch v-model="remote.clearPassword" /></el-form-item></el-col>
+                <el-col v-if="remote.id && auth.hasPermission('secret:update')" :span="8"><el-form-item label="清除密码"><el-switch v-model="remote.clearPassword" /></el-form-item></el-col>
               </el-row>
             </el-card>
           </el-col>
@@ -585,8 +587,8 @@ onMounted(load)
         <el-col :span="16"><el-form-item label="地址"><el-input v-model="form.address" placeholder="IP、域名或网址" /></el-form-item></el-col>
         <el-col :span="8"><el-form-item label="端口"><el-input v-model="form.port" /></el-form-item></el-col>
         <el-col :span="12"><el-form-item label="用户名"><el-input v-model="form.userName" /></el-form-item></el-col>
-        <el-col :span="12"><el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editingId ? '留空表示不修改' : ''" /></el-form-item></el-col>
-        <el-col v-if="editingId" :span="24"><el-form-item label="清除密码"><el-switch v-model="form.clearPassword" /></el-form-item></el-col>
+        <el-col v-if="auth.hasPermission('secret:update')" :span="12"><el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editingId ? '留空表示不修改' : ''" /></el-form-item></el-col>
+        <el-col v-if="editingId && auth.hasPermission('secret:update')" :span="24"><el-form-item label="清除密码"><el-switch v-model="form.clearPassword" /></el-form-item></el-col>
         </template>
         <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="3" placeholder="连接步骤、注意事项等" /></el-form-item></el-col>
       </el-row>
