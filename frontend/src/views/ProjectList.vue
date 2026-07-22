@@ -11,6 +11,18 @@ const loading = ref(false), dialogVisible = ref(false), saving = ref(false)
 const editingId = ref<number>(), items = ref<Project[]>([]), total = ref(0)
 const query = reactive({ keyword: '', page: 1, pageSize: 10 })
 const form = reactive<ProjectSaveRequest>({ region: '' })
+function uniqueApplicationNames(project: Project) {
+  const seen = new Set<string>()
+  return project.applications
+    .map(app => app.name.trim())
+    .filter(name => {
+      const key = name.toLocaleLowerCase()
+      if (!name || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+}
+
 
 async function load() { loading.value = true; try { const r = await getProjects({ ...query }); items.value = r.items; total.value = r.total } finally { loading.value = false } }
 function search() { query.page = 1; load() }
@@ -41,7 +53,7 @@ onMounted(load)
     </div>
     <el-table v-loading="loading" :data="items" border empty-text="暂无部署档案" class="clickable-table" @row-click="openDetail">
       <el-table-column prop="region" label="部署地点" min-width="180" />
-      <el-table-column label="业务系统" min-width="260"><template #default="scope"><el-space wrap><el-tag v-for="app in scope.row.applications" :key="app.id" effect="plain">{{ app.name }}</el-tag><span v-if="!scope.row.applications.length">-</span></el-space></template></el-table-column>
+      <el-table-column label="业务系统" min-width="260"><template #default="scope"><el-space wrap><el-tag v-for="name in uniqueApplicationNames(scope.row)" :key="name" effect="plain">{{ name }}</el-tag><span v-if="!uniqueApplicationNames(scope.row).length">-</span></el-space></template></el-table-column>
       <el-table-column v-if="auth.hasAnyPermission('archive:update','archive:delete')" label="操作" width="140" fixed="right">
         <template #default="scope">
           <el-button v-if="auth.hasPermission('archive:update')" link type="primary" @click.stop="openEdit(scope.row)">编辑</el-button>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -53,6 +53,26 @@ const visibleRemoteControlPasswords = reactive<Record<number, string>>({})
 const visibleApplicationPasswords = reactive<Record<number, string>>({})
 
 const connectionTypes = ['VPN 软件', 'VPN 网页', '网页堡垒机', '远程控制软件', 'Windows 远程桌面', 'Linux SSH', 'SQL Server', 'InfluxDB', 'Hangfire', 'Redis', '网站', '其他']
+
+function uniqueNames(names: string[]) {
+  const seen = new Set<string>()
+  return names.filter(name => {
+    const key = name.trim().toLocaleLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+const selectedApplicationNames = ref<string[]>([])
+const applicationNameOptions = computed(() => uniqueNames(applications.value.map(item => item.name)))
+
+function applicationIdsForNames(names: string[]) {
+  const keys = new Set(names.map(name => name.trim().toLocaleLowerCase()))
+  return applications.value
+    .filter(item => keys.has(item.name.trim().toLocaleLowerCase()))
+    .map(item => item.id)
+}
 const remoteSoftwareOptions = ['ToDesk', '向日葵']
 const rdpInstallerUrl = `${import.meta.env.BASE_URL}tools/ProjectBrainRdpInstaller.txt`
 const rdpInstallerFileName = 'Install-ProjectBrainRdpProtocol.cmd'
@@ -72,6 +92,7 @@ function resetForm() {
     applicationIds: [], parentId: undefined, name: '', connectionType: 'Windows 远程桌面', address: '', port: '',
     userName: '', password: undefined, clearPassword: false, remark: '', sort: 0, remoteControls: []
   })
+  selectedApplicationNames.value = []
 }
 
 async function load() {
@@ -118,6 +139,9 @@ function openEdit(item: ProjectConnection) {
       sort: remote.sort
     }))
   })
+  const selectedIds = new Set(item.applicationIds)
+  selectedApplicationNames.value = uniqueNames(applications.value.filter(item => selectedIds.has(item.id)).map(item => item.name))
+
   dialogVisible.value = true
 }
 
@@ -138,8 +162,9 @@ async function save() {
   }
   saving.value = true
   try {
-    if (editingId.value) await updateConnection(projectId, editingId.value, { ...form })
-    else await createConnection(projectId, { ...form })
+    const request = { ...form, applicationIds: applicationIdsForNames(selectedApplicationNames.value) }
+    if (editingId.value) await updateConnection(projectId, editingId.value, request)
+    else await createConnection(projectId, request)
     ElMessage.success('保存成功')
     dialogVisible.value = false
     await load()
@@ -461,9 +486,9 @@ onMounted(load)
         <el-table-column prop="connectionType" label="类型" width="190" show-overflow-tooltip />
         <el-table-column label="适用系统" min-width="180">
           <template #default="scope">
-            <el-tag v-if="!scope.row.applicationNames.length" type="info" effect="plain">公共连接</el-tag>
+            <el-tag v-if="!uniqueNames(scope.row.applicationNames).length" type="info" effect="plain">公共连接</el-tag>
             <el-space v-else wrap>
-              <el-tag v-for="name in scope.row.applicationNames" :key="name" effect="plain">{{ name }}</el-tag>
+              <el-tag v-for="name in uniqueNames(scope.row.applicationNames)" :key="name" effect="plain">{{ name }}</el-tag>
             </el-space>
           </template>
         </el-table-column>
@@ -565,8 +590,8 @@ onMounted(load)
         <el-col :span="12"><el-form-item label="类型" required><el-select v-model="form.connectionType" filterable allow-create default-first-option style="width:100%" placeholder="选择或输入连接类型"><el-option v-for="type in connectionTypes" :key="type" :label="type" :value="type" /></el-select></el-form-item></el-col>
         <el-col :span="12"><el-form-item label="前置连接"><el-select v-model="form.parentId" clearable style="width:100%"><el-option v-for="item in connections.filter(x => x.id !== editingId)" :key="item.id" :label="connectionPath(item)" :value="item.id" /></el-select></el-form-item></el-col>
         <el-col :span="24"><el-form-item label="适用系统">
-          <el-select v-model="form.applicationIds" multiple clearable style="width:100%" placeholder="留空表示公共连接">
-            <el-option v-for="item in applications" :key="item.id" :label="item.name" :value="item.id" />
+          <el-select v-model="selectedApplicationNames" multiple clearable style="width:100%" placeholder="留空表示公共连接">
+            <el-option v-for="name in applicationNameOptions" :key="name" :label="name" :value="name" />
           </el-select>
         </el-form-item></el-col>
         <template v-if="form.connectionType === '远程控制软件'">
