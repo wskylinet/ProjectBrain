@@ -65,8 +65,11 @@ using (var scope = app.Services.CreateScope())
     catch (Exception ex) { app.Logger.LogWarning(ex, "数据库初始化失败，请检查数据库连接。"); }
 }
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseCors(CorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 app.Run();
