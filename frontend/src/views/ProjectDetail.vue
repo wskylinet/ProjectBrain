@@ -309,9 +309,67 @@ function removeRemoteControl(index: number) {
   form.remoteControls.splice(index, 1)
 }
 
+function fallbackCopyText(value: string) {
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const inputSelection = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement
+    ? { start: activeElement.selectionStart, end: activeElement.selectionEnd, direction: activeElement.selectionDirection }
+    : null
+  let textarea: HTMLTextAreaElement | null = null
+
+  try {
+    textarea = document.createElement('textarea')
+    textarea.value = value
+    textarea.readOnly = true
+    textarea.setAttribute('aria-hidden', 'true')
+    Object.assign(textarea.style, {
+      position: 'fixed',
+      left: '-9999px',
+      top: '0',
+      opacity: '0',
+      pointerEvents: 'none'
+    })
+    document.body.appendChild(textarea)
+    textarea.focus({ preventScroll: true })
+    textarea.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    textarea?.remove()
+    if (activeElement?.isConnected) {
+      try {
+        activeElement.focus({ preventScroll: true })
+        if (inputSelection && (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement)) {
+          activeElement.setSelectionRange(inputSelection.start, inputSelection.end, inputSelection.direction ?? undefined)
+        }
+      } catch {
+        // Restoring focus is best-effort and must not hide the copy result.
+      }
+    }
+  }
+}
+
 async function copyText(value: string, label: string) {
-  await navigator.clipboard.writeText(value)
-  ElMessage.success(`${label}已复制`)
+  let copied = false
+
+  if (window.isSecureContext && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value)
+      copied = true
+    } catch {
+      // Fall back for denied permissions or other Clipboard API failures.
+    }
+  }
+
+  if (!copied) {
+    copied = fallbackCopyText(value)
+  }
+
+  if (copied) {
+    ElMessage.success(`${label}已复制`)
+  } else {
+    ElMessage.error('复制失败，请手动复制或使用 HTTPS 访问')
+  }
 }
 
 function isWebAddress(address?: string) {
