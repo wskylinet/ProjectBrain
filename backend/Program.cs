@@ -59,11 +59,37 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+var initializeAdmin = args.Contains("--init-admin", StringComparer.OrdinalIgnoreCase);
 using (var scope = app.Services.CreateScope())
 {
-    try { scope.ServiceProvider.GetRequiredService<DbContext>().InitDatabase(); }
-    catch (Exception ex) { app.Logger.LogWarning(ex, "数据库初始化失败，请检查数据库连接。"); }
+    try
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<DbContext>();
+        dbContext.InitDatabase();
+        if (initializeAdmin)
+        {
+            var userName = Environment.GetEnvironmentVariable("PROJECTBRAIN_INITIAL_ADMIN_USERNAME");
+            var password = Environment.GetEnvironmentVariable("PROJECTBRAIN_INITIAL_ADMIN_PASSWORD");
+            if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrEmpty(password))
+                throw new InvalidOperationException(
+                    "请设置 PROJECTBRAIN_INITIAL_ADMIN_USERNAME 和 PROJECTBRAIN_INITIAL_ADMIN_PASSWORD 环境变量。");
+
+            dbContext.CreateInitialAdmin(userName, password);
+            app.Logger.LogInformation("初始管理员 {UserName} 创建成功。", userName.Trim());
+        }
+    }
+    catch (Exception ex)
+    {
+        if (initializeAdmin)
+        {
+            app.Logger.LogError(ex, "初始管理员创建失败。");
+            Environment.ExitCode = 1;
+            return;
+        }
+        app.Logger.LogWarning(ex, "数据库初始化失败，请检查数据库连接。");
+    }
 }
+if (initializeAdmin) return;
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
 app.UseDefaultFiles();
 app.UseStaticFiles();

@@ -44,7 +44,19 @@ dotnet run
 
 - 默认地址：`http://localhost:5087`
 - Swagger 文档：`http://localhost:5087/swagger`
-- 启动时会自动创建数据库与表并写入管理员账号；若数据库暂不可用，服务仍可启动（仅记录警告）。
+- 启动时会自动创建数据库与表，但不会创建任何默认账号；若数据库暂不可用，服务仍可启动（仅记录警告）。
+
+首次部署且用户表为空时，手动执行一次初始管理员命令。密码不会写入配置或代码：
+
+```powershell
+$env:PROJECTBRAIN_INITIAL_ADMIN_USERNAME = 'admin'
+$env:PROJECTBRAIN_INITIAL_ADMIN_PASSWORD = '请替换为至少12位的强密码'
+dotnet run -- --init-admin
+Remove-Item Env:PROJECTBRAIN_INITIAL_ADMIN_USERNAME
+Remove-Item Env:PROJECTBRAIN_INITIAL_ADMIN_PASSWORD
+```
+
+该命令仅在用户表完全为空时有效，成功后会立即退出；以后请登录系统，通过用户管理功能创建其他用户。
 
 ### 2. 前端（frontend）
 
@@ -59,8 +71,19 @@ npm run dev
 
 ## 安全提示
 
-- 生产环境务必修改 `appsettings.json` 中的 `Jwt:SecretKey` 为足够长的随机值。
+- 生产环境务必通过安全环境变量提供足够长的随机 `Jwt__SecretKey`。
 - 数据库连接字符串、密钥等敏感信息不应提交到版本库，建议使用环境变量或用户机密。
+
+生产部署时，`appsettings.json` 不保存数据库连接、JWT 密钥和业务密码加密主密钥。IIS 服务器本地保管并填写
+`backend/set-production-env.local.ps1`，使用管理员 PowerShell 将变量写入应用池配置：
+
+```powershell
+.\set-production-env.local.ps1 -AppPoolName 'ProjectBrain'
+```
+
+脚本会设置 `ASPNETCORE_ENVIRONMENT=Production`、`DOTNET_ENVIRONMENT=Production`、
+`ConnectionStrings__Default`、`Jwt__SecretKey` 和 `Encryption__MasterKey`，随后回收指定应用池。它不会把密钥写入
+站点发布目录的 `web.config`。`*.local.ps1` 已被 Git 忽略，该脚本需要单独安全传到服务器并限制管理员读取。
 
 ## 一键远程桌面
 

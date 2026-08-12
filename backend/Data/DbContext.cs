@@ -31,24 +31,39 @@ public class DbContext
 
         SeedPermissions();
         SeedRoles();
+    }
 
-        var admin = Db.Queryable<SysUser>().First(x => x.UserName == "admin");
-        if (admin is null)
+    public void CreateInitialAdmin(string userName, string password)
+    {
+        userName = userName.Trim();
+        if (userName.Length is < 2 or > 50)
+            throw new InvalidOperationException("初始管理员用户名长度必须为 2 到 50 个字符。");
+        if (password.Length is < 12 or > 100)
+            throw new InvalidOperationException("初始管理员密码长度必须为 12 到 100 个字符。");
+        if (Db.Queryable<SysUser>().Any())
+            throw new InvalidOperationException("用户表不为空，拒绝创建初始管理员。请使用系统内的用户管理功能。");
+
+        var adminRoleId = Db.Queryable<SysRole>()
+            .Where(x => x.Code == "Admin" && !x.IsDeleted)
+            .Select(x => x.Id)
+            .First();
+        if (adminRoleId == 0)
+            throw new InvalidOperationException("管理员角色不存在，请先完成数据库初始化。");
+
+        var result = Db.Ado.UseTran(() =>
         {
-            admin = new SysUser
+            var userId = Db.Insertable(new SysUser
             {
-                UserName = "admin",
+                UserName = userName,
                 NickName = "超级管理员",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
                 IsEnabled = true,
                 CreateTime = DateTime.Now
-            };
-            admin.Id = Db.Insertable(admin).ExecuteReturnBigIdentity();
-        }
-
-        var adminRoleId = Db.Queryable<SysRole>().Where(x => x.Code == "Admin").Select(x => x.Id).First();
-        if (!Db.Queryable<SysUserRole>().Any(x => x.UserId == admin.Id && x.RoleId == adminRoleId))
-            Db.Insertable(new SysUserRole { UserId = admin.Id, RoleId = adminRoleId }).ExecuteCommand();
+            }).ExecuteReturnBigIdentity();
+            Db.Insertable(new SysUserRole { UserId = userId, RoleId = adminRoleId }).ExecuteCommand();
+        });
+        if (!result.IsSuccess)
+            throw new InvalidOperationException("创建初始管理员失败。", result.ErrorException);
     }
 
     private void SeedPermissions()
