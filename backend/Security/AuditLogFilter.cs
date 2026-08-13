@@ -39,13 +39,15 @@ public class AuditLogFilter : IAsyncActionFilter, IOrderedFilter
         var controller = context.RouteData.Values["controller"]?.ToString() ?? "Unknown";
         var actionName = context.RouteData.Values["action"]?.ToString() ?? string.Empty;
         var action = ResolveAction(controller, actionName, http.Request.Method);
+        var eventCode = http.Items[SecurityEventCodes.HttpContextItemKey] as string;
 
         try
         {
             await _auditLogService.WriteAsync(new SysAuditLog
             {
                 UserId = userId, UserName = http.User.Identity?.Name ?? login?.UserName,
-                Action = action, Module = controller, Description = $"{controller}.{actionName} ({action})",
+                Action = action, Module = controller, Description = ResolveDescription(controller, actionName, action, eventCode),
+                EventCode = eventCode,
                 HttpMethod = http.Request.Method, RequestPath = http.Request.Path,
                 TargetId = ResolveTargetId(context.RouteData.Values), DetailJson = SerializeArguments(context.ActionArguments),
                 IpAddress = http.Connection.RemoteIpAddress?.ToString(),
@@ -75,6 +77,13 @@ public class AuditLogFilter : IAsyncActionFilter, IOrderedFilter
         if (action.Contains("Password", StringComparison.OrdinalIgnoreCase)) return "ResetPassword";
         return method switch { "POST" => "Create", "PUT" or "PATCH" => "Update", "DELETE" => "Delete", _ => "Access" };
     }
+
+    private static string ResolveDescription(string controller, string actionName, string action, string? eventCode) => eventCode switch
+    {
+        SecurityEventCodes.InvalidCredentials => "登录失败：用户名或密码错误",
+        SecurityEventCodes.AccountTemporarilyLocked => "登录失败：用户名已被临时锁定",
+        _ => $"{controller}.{actionName} ({action})"
+    };
 
     private static string? ResolveTargetId(RouteValueDictionary values)
     {

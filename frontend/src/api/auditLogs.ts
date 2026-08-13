@@ -8,6 +8,7 @@ export interface AuditLog {
   action: string
   module: string
   description: string
+  eventCode?: string
   httpMethod: string
   requestPath: string
   targetId?: string
@@ -22,6 +23,7 @@ export interface AuditLog {
 export interface AuditLogQuery {
   keyword?: string
   action?: string
+  eventCode?: string
   isSuccess?: boolean
   startTime?: string
   endTime?: string

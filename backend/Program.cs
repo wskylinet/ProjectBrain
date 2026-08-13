@@ -1,8 +1,11 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ProjectBrain.Api.Auth;
+using ProjectBrain.Api.Common;
 using ProjectBrain.Api.Data;
 using ProjectBrain.Api.Options;
 using ProjectBrain.Api.Security;
@@ -10,6 +13,7 @@ using ProjectBrain.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 const string CorsPolicy = "AllowFrontend";
+const string LoginRateLimitPolicy = "Login";
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<DbContext>();
@@ -21,6 +25,8 @@ builder.Services.AddScoped<IAuditLogService, AuditLogService>();
 builder.Services.AddScoped<PermissionAuthorizationFilter>();
 builder.Services.AddScoped<AuditLogFilter>();
 builder.Services.AddSingleton<ISecretCipher, AesSecretCipher>();
+builder.Services.AddSingleton<ILoginAttemptTracker, LoginAttemptTracker>();
+builder.Services.AddSingleton<RateLimitAuditRecorder>();
 
 var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
@@ -34,7 +40,39 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
     };
 });
 builder.Services.AddAuthorization();
-builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        await context.HttpContext.RequestServices.GetRequiredService<RateLimitAuditRecorder>()
+            .RecordAsync(context.HttpContext, cancellationToken);
+        context.HttpContext.Response.ContentType = "application/json; charset=utf-8";
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            ApiResult.Fail("登录尝试过于频繁，请稍后再试", StatusCodes.Status429TooManyRequests),
+            cancellationToken);
+    };
+    options.AddPolicy(LoginRateLimitPolicy, httpContext =>
+    {
+        var remoteIp = httpContext.Connection.RemoteIpAddress;
+        if (remoteIp?.IsIPv4MappedToIPv6 == true) remoteIp = remoteIp.MapToIPv4();
+        var partitionKey = remoteIp?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
+if (builder.Environment.IsDevelopment()) builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
 {
     var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"];
     policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
@@ -91,9 +129,42 @@ using (var scope = app.Services.CreateScope())
 }
 if (initializeAdmin) return;
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers.XFrameOptions = "DENY";
+    context.Response.Headers.ContentSecurityPolicy =
+        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
+        "form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+        "img-src 'self' data:; font-src 'self' data:; connect-src 'self'";
+    context.Response.Headers["Permissions-Policy"] =
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
+
+    context.Response.OnStarting(() =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api"))
+            context.Response.Headers.CacheControl = "no-store";
+        else if (context.Response.ContentType?.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) == true)
+            context.Response.Headers.CacheControl = "no-cache";
+        return Task.CompletedTask;
+    });
+
+    await next();
+});
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/tools"))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+    await next();
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
-app.UseCors(CorsPolicy);
+if (app.Environment.IsDevelopment()) app.UseCors(CorsPolicy);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

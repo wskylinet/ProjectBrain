@@ -4,6 +4,7 @@ public class AuditLogQuery
 {
     public string? Keyword { get; set; }
     public string? Action { get; set; }
+    public string? EventCode { get; set; }
     public bool? IsSuccess { get; set; }
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
@@ -19,6 +20,7 @@ public class AuditLogDto
     public string Action { get; set; } = string.Empty;
     public string Module { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string? EventCode { get; set; }
     public string HttpMethod { get; set; } = string.Empty;
     public string RequestPath { get; set; } = string.Empty;
     public string? TargetId { get; set; }

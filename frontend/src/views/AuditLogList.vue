@@ -9,11 +9,17 @@ const detailVisible = ref(false)
 const selected = ref<AuditLog>()
 const resultFilter = ref<'' | boolean>('')
 const timeRange = ref<[Date, Date] | []>([])
-const query = reactive({ keyword: '', action: '', page: 1, pageSize: 20 })
+const query = reactive({ keyword: '', action: '', eventCode: '', page: 1, pageSize: 20 })
 
 const actionLabels: Record<string, string> = {
   Login: '登录', Create: '新增', Update: '修改', Delete: '删除',
   ResetPassword: '重置密码', RevealSecret: '查看密码', Access: '访问'
+}
+
+const eventLabels: Record<string, string> = {
+  InvalidCredentials: '用户名或密码错误',
+  AccountTemporarilyLocked: '用户名临时锁定',
+  IpRateLimited: 'IP 请求过频'
 }
 
 async function load() {
@@ -22,6 +28,7 @@ async function load() {
     const result = await getAuditLogs({
       ...query,
       action: query.action || undefined,
+      eventCode: query.eventCode || undefined,
       isSuccess: resultFilter.value === '' ? undefined : resultFilter.value,
       startTime: timeRange.value.length ? timeRange.value[0].toISOString() : undefined,
       endTime: timeRange.value.length ? timeRange.value[1].toISOString() : undefined
@@ -58,6 +65,11 @@ onMounted(load)
       <el-select v-model="resultFilter" @change="search">
         <el-option label="全部结果" value="" /><el-option label="成功" :value="true" /><el-option label="失败" :value="false" />
       </el-select>
+      <el-select v-model="query.eventCode" placeholder="全部安全事件" clearable @change="search">
+        <el-option label="用户名或密码错误" value="InvalidCredentials" />
+        <el-option label="用户名临时锁定" value="AccountTemporarilyLocked" />
+        <el-option label="IP 请求过频" value="IpRateLimited" />
+      </el-select>
       <el-date-picker v-model="timeRange" type="datetimerange" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" @change="search" />
       <el-button type="primary" plain @click="search">查询</el-button>
     </div>
@@ -66,6 +78,7 @@ onMounted(load)
       <el-table-column label="用户" min-width="120"><template #default="scope">{{ scope.row.userName || '匿名用户' }}</template></el-table-column>
       <el-table-column label="操作" width="110"><template #default="scope">{{ actionLabels[scope.row.action] || scope.row.action }}</template></el-table-column>
       <el-table-column prop="module" label="模块" width="110" />
+      <el-table-column label="安全事件" min-width="150"><template #default="scope">{{ scope.row.eventCode ? (eventLabels[scope.row.eventCode] || scope.row.eventCode) : '-' }}</template></el-table-column>
       <el-table-column prop="requestPath" label="请求地址" min-width="260" show-overflow-tooltip />
       <el-table-column label="结果" width="90"><template #default="scope"><el-tag :type="scope.row.isSuccess ? 'success' : 'danger'">{{ scope.row.isSuccess ? '成功' : '失败' }}</el-tag></template></el-table-column>
       <el-table-column prop="ipAddress" label="IP 地址" min-width="130" />
@@ -81,6 +94,8 @@ onMounted(load)
       <el-descriptions-item label="时间">{{ formatTime(selected.createTime) }}</el-descriptions-item>
       <el-descriptions-item label="操作">{{ actionLabels[selected.action] || selected.action }}</el-descriptions-item>
       <el-descriptions-item label="结果">{{ selected.isSuccess ? '成功' : `失败（${selected.statusCode}）` }}</el-descriptions-item>
+      <el-descriptions-item label="安全事件" :span="2">{{ selected.eventCode ? (eventLabels[selected.eventCode] || selected.eventCode) : '-' }}</el-descriptions-item>
+      <el-descriptions-item label="说明" :span="2">{{ selected.description }}</el-descriptions-item>
       <el-descriptions-item label="请求" :span="2">{{ selected.httpMethod }} {{ selected.requestPath }}</el-descriptions-item>
       <el-descriptions-item label="目标" :span="2">{{ selected.targetId || '-' }}</el-descriptions-item>
       <el-descriptions-item label="IP 地址">{{ selected.ipAddress || '-' }}</el-descriptions-item>
@@ -93,7 +108,7 @@ onMounted(load)
 <style scoped>
 .page-heading { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }
 .page-heading h2 { margin:0 0 6px; font-size:20px; }.page-heading p { margin:0; color:#909399; font-size:14px; }
-.toolbar { display:grid; grid-template-columns:minmax(220px,1fr) 140px 120px minmax(330px,1fr) auto; gap:10px; margin-bottom:16px; }
+.toolbar { display:grid; grid-template-columns:minmax(220px,1fr) 140px 120px 180px minmax(330px,1fr) auto; gap:10px; margin-bottom:16px; }
 .pagination { justify-content:flex-end; margin-top:16px; }
 pre { margin:0; white-space:pre-wrap; word-break:break-all; font-family:Consolas, monospace; font-size:12px; }
 @media (max-width: 1100px) { .toolbar { grid-template-columns:1fr 1fr; } }

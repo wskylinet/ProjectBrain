@@ -26,7 +26,7 @@ Set-Item -Path $iconKey -Value "`"$mstscPath`",0"
 
 $commandKey = Join-Path $protocolKey 'shell\open\command'
 New-Item -Path $commandKey -Force | Out-Null
-$command = "`"$powershellPath`" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$handlerDestination`" `"%1`""
+$command = "`"$powershellPath`" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$handlerDestination`" `"%1`""
 Set-Item -Path $commandKey -Value $command
 
 Write-Host 'Project Brain 一键远程协议安装成功。'

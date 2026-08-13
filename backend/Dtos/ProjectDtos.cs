@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ProjectBrain.Api.Validation;
 
 namespace ProjectBrain.Api.Dtos;
 
@@ -71,7 +72,7 @@ public class ApplicationSaveRequest
     [Required, StringLength(100)]
     public string Name { get; set; } = string.Empty;
 
-    [StringLength(500)]
+    [StringLength(500), HttpUrl]
     public string? LoginAddress { get; set; }
 
     [StringLength(100)]

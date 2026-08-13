@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { downloadRdpTool, getRdpToolMetadata, type RdpToolName } from '@/api/rdpTools'
 import {
   createApplication,
   createContact,
@@ -74,10 +75,34 @@ function applicationIdsForNames(names: string[]) {
     .map(item => item.id)
 }
 const remoteSoftwareOptions = ['ToDesk', '向日葵']
-const rdpInstallerUrl = `${import.meta.env.BASE_URL}tools/ProjectBrainRdpInstaller.txt`
-const rdpInstallerFileName = 'Install-ProjectBrainRdpProtocol.cmd'
-const rdpUninstallerUrl = `${import.meta.env.BASE_URL}tools/ProjectBrainRdpUninstaller.txt`
-const rdpUninstallerFileName = 'Uninstall-ProjectBrainRdpProtocol.cmd'
+const downloadingRdpTool = ref(false)
+
+async function downloadAndVerifyRdpTool(name: RdpToolName) {
+  downloadingRdpTool.value = true
+  try {
+    const metadata = await getRdpToolMetadata(name)
+    const bytes = await downloadRdpTool(name)
+    const digest = await crypto.subtle.digest('SHA-256', bytes)
+    const actualHash = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('').toUpperCase()
+    if (actualHash !== metadata.sha256.toUpperCase()) throw new Error('远程工具完整性校验失败，已阻止下载')
+
+    await ElMessageBox.confirm(
+      `文件：${metadata.fileName}\n大小：${metadata.size} 字节\nSHA-256：${metadata.sha256}\n\n校验通过。该脚本会在当前用户目录注册自定义 RDP 协议，是否保存？`,
+      '远程工具安全确认',
+      { type: 'warning', confirmButtonText: '保存文件', cancelButtonText: '取消', distinguishCancelAndClose: true }
+    )
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = metadata.fileName
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error(error instanceof Error ? error.message : '远程工具下载失败')
+  } finally {
+    downloadingRdpTool.value = false
+  }
+}
 
 const form = reactive<ConnectionSaveRequest>({
   applicationIds: [], name: '', connectionType: 'Windows 远程桌面', clearPassword: false, sort: 0, remoteControls: []
@@ -452,11 +477,11 @@ onMounted(load)
       <h2>{{ project?.region || '部署档案详情' }}</h2>
       <div class="page-header-spacer" />
       <el-dropdown>
-        <el-button plain>远程工具</el-button>
+        <el-button plain :loading="downloadingRdpTool">远程工具</el-button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item><a :href="rdpInstallerUrl" :download="rdpInstallerFileName">下载初始化脚本</a></el-dropdown-item>
-            <el-dropdown-item><a :href="rdpUninstallerUrl" :download="rdpUninstallerFileName">下载卸载脚本</a></el-dropdown-item>
+            <el-dropdown-item @click="downloadAndVerifyRdpTool('installer')">下载初始化脚本</el-dropdown-item>
+            <el-dropdown-item @click="downloadAndVerifyRdpTool('uninstaller')">下载卸载脚本</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -479,7 +504,8 @@ onMounted(load)
         <el-table-column label="登录入口" min-width="280">
           <template #default="scope">
             <template v-if="scope.row.loginAddress">
-              <a :href="scope.row.loginAddress" target="_blank" rel="noopener noreferrer">{{ scope.row.loginAddress }}</a>
+              <a v-if="isWebAddress(scope.row.loginAddress)" :href="scope.row.loginAddress" target="_blank" rel="noopener noreferrer">{{ scope.row.loginAddress }}</a>
+              <span v-else class="copy-value">{{ scope.row.loginAddress }}</span>
               <el-button link type="primary" @click="copyText(scope.row.loginAddress, '登录入口')">复制</el-button>
             </template>
             <span v-else>-</span>

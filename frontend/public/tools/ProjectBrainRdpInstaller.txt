@@ -95,7 +95,7 @@ Set-Item -Path $iconKey -Value "`"$mstscPath`",0"
 
 $commandKey = Join-Path $protocolKey 'shell\open\command'
 New-Item -Path $commandKey -Force | Out-Null
-$command = "`"$powershellPath`" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$handlerDestination`" `"%1`""
+$command = "`"$powershellPath`" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$handlerDestination`" `"%1`""
 Set-Item -Path $commandKey -Value $command
 
 Write-Host 'Project Brain Remote Desktop protocol installed successfully.' -ForegroundColor Green

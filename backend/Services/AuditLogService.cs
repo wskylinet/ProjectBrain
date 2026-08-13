@@ -21,6 +21,7 @@ public class AuditLogService : IAuditLogService
                 (x.UserName != null && x.UserName.Contains(keyword!)) ||
                 x.Description.Contains(keyword!) || x.RequestPath.Contains(keyword!))
             .WhereIF(!string.IsNullOrEmpty(query.Action), x => x.Action == query.Action)
+            .WhereIF(!string.IsNullOrEmpty(query.EventCode), x => x.EventCode == query.EventCode)
             .WhereIF(query.IsSuccess.HasValue, x => x.IsSuccess == query.IsSuccess!.Value)
             .WhereIF(query.StartTime.HasValue, x => x.CreateTime >= query.StartTime!.Value)
             .WhereIF(query.EndTime.HasValue, x => x.CreateTime <= query.EndTime!.Value);
@@ -29,7 +30,7 @@ public class AuditLogService : IAuditLogService
             .Skip((page - 1) * pageSize).Take(pageSize).Select(x => new AuditLogDto
             {
                 Id = x.Id, UserId = x.UserId, UserName = x.UserName, Action = x.Action,
-                Module = x.Module, Description = x.Description, HttpMethod = x.HttpMethod,
+                Module = x.Module, Description = x.Description, EventCode = x.EventCode, HttpMethod = x.HttpMethod,
                 RequestPath = x.RequestPath, TargetId = x.TargetId, DetailJson = x.DetailJson,
                 IpAddress = x.IpAddress, IsSuccess = x.IsSuccess, StatusCode = x.StatusCode,
                 DurationMs = x.DurationMs, CreateTime = x.CreateTime

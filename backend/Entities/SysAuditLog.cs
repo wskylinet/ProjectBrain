@@ -13,6 +13,7 @@ public class SysAuditLog
     [SugarColumn(Length = 30)] public string Action { get; set; } = string.Empty;
     [SugarColumn(Length = 50)] public string Module { get; set; } = string.Empty;
     [SugarColumn(Length = 200)] public string Description { get; set; } = string.Empty;
+    [SugarColumn(Length = 50, IsNullable = true)] public string? EventCode { get; set; }
     [SugarColumn(Length = 10)] public string HttpMethod { get; set; } = string.Empty;
     [SugarColumn(Length = 500)] public string RequestPath { get; set; } = string.Empty;
     [SugarColumn(Length = 100, IsNullable = true)] public string? TargetId { get; set; }
